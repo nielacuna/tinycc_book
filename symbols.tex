@@ -1,0 +1,36 @@
+
+\chapter{Symbols}
+
+a symbol has a type, and has a value.
+
+
+\begin{verbatim}
+736 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c)
+737 {
+738     Sym *s;
+739 
+740     s = sym_malloc();
+741     memset(s, 0, sizeof *s);
+742     s->v = v;
+743     s->type.t = t;
+744     s->c = c;
+745     /* add in stack */
+746     s->prev = *ps;
+747     *ps = s;
+748     return s;
+749 }
+\end{verbatim}
+
+\subsection{The Symbol Table}
+
+
+
+*** the include stack
+
+*** the define stack
+
+*** the ifdef stack
+
+*** the pack stack
+
+

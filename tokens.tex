@@ -1,0 +1,237 @@
+
+\chapter{Tokens and Lexemes}
+
+A token is the most basic element that comprises a language. It is an indivisible unit lexical unit. For example, in the C language, keywords like while and for are tokens. Symbols like \emph{>} or \emph{++} or \emph{>=} or \emph{>>} are also tokens. Identifiers such as variable names, function names are tokens. The original string that comprises a token is called a \emph{lexem}. There is not a one-to-one relationship between lexemes and tokens. A name or number token for example can have many possible lexemes associated with it. C keyword tokens like \emph{while} or \emph{for} or \emph{define} always matches a single lexeme. 
+
+\section{Tokens in TCC}
+
+There are two kinds of tokens in TCC, static tokens - the strings of which are compiled into TCC itself and dynamic token which are tokens created by the lexer while it is sifting through the source code being compiled.
+
+\subsection{Static Tokens}
+Static tokens are determined during compile time at <tcc.h>. The relevant listing is shown below:
+\begin{verbatim}
+1163 enum tcc_token {
+1164     TOK_LAST = TOK_IDENT - 1
+1165 #define DEF(id, str) ,id
+1166 #include "tcctok.h"
+1167 #undef DEF
+1168 };
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 1164} \verb|TOK_LAST| = 255. This assures that the enumerations start at the 256 value or \verb|TOK_IDENT|. This is because the values 0-255 are all already reserved by the ASCII and ISO-8859-1 encodings and sometimes, some of these characters are returned as tokens themselves by the lexer depending on the parse flags or tok flags.
+
+\textbf{line 1165-1166} the file \verb|tcctok.h| follows a specially formatted 2-tuple entry like \verb|DEF(TOK_INT, "int")|. The first one is used as a define constant and the second one is used as a string associated with this token. The purpose of the \verb|DEF()| is to really just filter out one of the two, depending on what part of the tuple will be used. In the case of defining token constants, the first part of the tuple is required, hence the \verb|DEF(id, str)| uses \verb|id| and leaves out \verb|str| in its definition.
+\end{tcc_desc}
+
+\subsection{More Static Tokens}
+
+\begin{verbatim}
+to be studied further... two char tokens like <=, <<, &=, ==, etc...
+\end{verbatim}
+
+
+\subsection{Dynamic Tokens}
+
+While C reserved keywords like int, void, inline and etc have their values computed statically upon building TCC itself, most tokens extracted during the passes made to the source code being compiled are assigned dynamically. Currently, this is simply an incremental assignment of the global variable \verb|tok_ident|.
+
+\subsection{Building the Token Table}
+
+The token table is a dynamically allocated TokenSym pointer array that can be enlarged during runtime to be able to accomodate new additional tokens as they are discovered during lexical analysis. 
+
+Building the table is a two step process. The first part of the table is constructed early during TCC startup. Care must be taken so that the statically allocated tokens are placed in the table with their token identifiers intact - that is, the macro definitions that TCC created for them are not changed, relative to \verb|TOK_IDENT|. The code is elaborated inside \verb|tccpp_new()| function below.
+
+\begin{verbatim}
+3667     tok_ident = TOK_IDENT;
+3668     p = tcc_keywords;
+3669     while (*p) {
+3670         r = p;
+3671         for(;;) {
+3672             c = *r++;
+3673             if (c == '\0')
+3674                 break;
+3675         }
+3676         tok_alloc(p, r - p - 1);
+3677         p = r;
+3678     }
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 3667} set the global \verb|tok_ident| variable to start at \verb|TOK_IDENT| which is the value 256.
+
+\textbf{line 3668} \verb|p| is used always as a pointer to the first letter of substring.
+
+\textbf{line 3669} exhaust all characters inside \verb|tcc_keywords| array.
+
+\textbf{line 3672-3675} \verb|r| is a pointer to the terminating \verb|NULL| of the current substring. A simple pointer subtraction \verb|r - p - 1| will yield the substring length.
+
+\textbf{line 3676} create a token entry now in the token table and also add it to the hashtable. Passing the substring (lexeme) and the substring length as parameters.
+
+\textbf{3677} \verb|p| points to next substring in the sequence now.
+
+\end{tcc_desc}
+
+Each token is ofcourse associated with a string (lexeme). Let's inspect how \verb|tcc_keywords| is created at \verb|tccpp.c| below.
+
+\begin{verbatim}
+59 static const char tcc_keywords[] = 
+60 #define DEF(id, str) str "\0"
+61 #include "tcctok.h"
+62 #undef DEF
+63 ;
+\end{verbatim}
+\begin{tcc_desc}
+\textbf{line 59} \verb|tcc_keywords| is a constant character array.
+
+\textbf{line 60-61} create a function-like macro called \verb|DEF()| to filter out the string part of the token-string tuple defined in \verb|tcctok.h|. Additionally, append a terminating \verb|NULL| character to the string. This creates a very long \verb|tcc_keywords| string containing substrings inside that are separated by the \verb|NULL| character.
+
+\textbf{62} \verb|DEF()| macro's purpose has been fulfilled, undefine it so it can be reused in the future.
+\end{tcc_desc}
+
+\subsection{Adding new tokens to the system}
+
+\subsubsection{The Token Table}
+
+The token table is the actual repository of all the tokens being used by the compilation environment when processing a source file.
+
+\subsubsection{The Token Hash}
+
+The token hash is used for fast searching of tokens. It is important to be able to search quickly for dupicate tokens being used, like for example, if the source code being compiled has two defines for a macro, then it should be detected by TCC and the user should be alerted of the fact.
+
+There are a few handy APIs to use when adding new tokens to the system. A token found in the token table also has an entry in the token hash.
+
+\subsubsection{token\_alloc}
+
+Care must be taken when adding a new strings to the system to become a token. Tokens should be unique and multiple instances of the same string should have only one token. For instance, there will be many instances of the keyword \verb|int| in a source code, but they all refer to just one token, \verb|TOK_INT|.
+
+The \verb|tok_alloc()| function adds a layer of protection when creating a new token from a string. It first searches the token hash if such a string is already associated with a token and if it is, no new token is created. Instead, a reference to the already existing token is returned.
+
+On the other hand, if the string doesn't currently have any associated token, then a new token is created both in the token hash and the token table.
+
+\begin{verbatim}
+464 ST_FUNC TokenSym *tok_alloc(const char *str, int len)
+465 {
+466     TokenSym *ts, **pts;
+467     int i;
+468     unsigned int h;
+469     
+470     h = TOK_HASH_INIT;
+471     for(i=0;i<len;i++)
+472         h = TOK_HASH_FUNC(h, ((unsigned char *)str)[i]);
+473     h &= (TOK_HASH_SIZE - 1);
+474 
+475     pts = &hash_ident[h];
+476     for(;;) {
+477         ts = *pts;
+478         if (!ts)
+479             break;
+480         if (ts->len == len && !memcmp(ts->str, str, len))
+481             return ts;
+482         pts = &(ts->hash_next);
+483     }
+484     return tok_alloc_new(pts, str, len);
+485 }
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 470-475} compute the hash index for the string. set \verb|pts| to point to the slot index where this new token should go to.
+
+\textbf{line 476-483} do a search in the hash index for this token, taking into consideration hash collisions. When a token collides with other tokens on the same index, the list turns into a singly linked list.
+
+\textbf{line 477} dereference the tokensym pointer in current hash index pointer.
+
+\textbf{line 478-479} if we have reach an empty index OR the end of the linked list (when there is a hash collision), we know that it is our first encounter with this string and no token for it has been created yet. Move to line 484 now to create a token for the string.
+
+\textbf{line 480-481} We are looking at a potential token object containing the same string, and if current token indeed does have the same string, we already have created a token for string so we don't need to create a new one. Return a reference to the token instead.
+
+\textbf{line 482}Hash collisions degrade the search functionality of a hash into a singly linked list. Simply move to the next token in this linked list. 
+
+\textbf{line 484} create a new token for string and put a reference to this new token on the hash table slot pointed to by \verb|pts|.
+\end{tcc_desc}
+
+\subsubsection{tok\_alloc\_new}
+
+The \verb|tok_alloc_new| function is a lowlevel API that requires a token hash slot as a parameter where it will save a reference to the new token it will create.
+
+\begin{verbatim}
+429 static TokenSym *tok_alloc_new(TokenSym **pts, const char *str, int len)
+430 {
+431     TokenSym *ts, **ptable;
+432     int i;
+433
+434     if (tok_ident >= SYM_FIRST_ANOM) 
+435         tcc_error("memory full (symbols)");
+436
+437     /* expand token table if needed */
+438     i = tok_ident - TOK_IDENT;
+439     if ((i % TOK_ALLOC_INCR) == 0) {
+440         ptable = tcc_realloc(table_ident, (i + TOK_ALLOC_INCR) * sizeof(TokenSym *));
+441         table_ident = ptable;
+442     }
+443
+444     ts = tal_realloc(toksym_alloc, 0, sizeof(TokenSym) + len);
+445     table_ident[i] = ts;
+446     ts->tok = tok_ident++;
+447     ts->sym_define = NULL;
+448     ts->sym_label = NULL;
+449     ts->sym_struct = NULL;
+450     ts->sym_identifier = NULL;
+451     ts->len = len;
+452     ts->hash_next = NULL;
+453     memcpy(ts->str, str, len);
+454     ts->str[len] = '\0';
+455     *pts = ts;
+456     return ts;
+457 }
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 434-435} TCC has exhausted the token id space and cannot give out tokens anymore. This is a fatal error.
+
+\textbf{line 438} Normalize the token identifier so we can insert it into the token table. Token numbering starts out with \verb|TOK_IDENT| which is 256, but in reference to the token table, this is index 0.
+
+\textbf{line 439} we trigger token table memory expansion every 512th instance.
+
+\textbf{line 440} grow the token table by +512 slots everytime we need to expand it. We only need to expand it by 512, everytime we fill up all the new 512 slots we added to the table at a prior reallocation.
+
+\textbf{line 441} update the \verb|table_ident| pointer to new bigger array.
+
+\textbf{line 444-454} allocate a new tokensym object with enough space for the string. Initialize this new token with its assigned token number and the string associated with it.
+
+\textbf{line 456} save a reference of this new token to its proper slot in the token hash.
+\end{tcc_desc}
+
+\subsection{Global Variables}
+
+\subsubsection{tok\_flags}
+
+\begin{verbatim}
+#define TOK_FLAG_BOL   0x0001
+#define TOK_FLAG_BOF   0x0002
+#define TOK_FLAG_ENDIF 0x0004
+#define TOK_FLAG_EOF   0x0008
+\end{verbatim}
+
+
+\subsubsection{parse\_flags}
+
+\begin{verbatim}
+#define PARSE_FLAG_PREPROCESS 0x0001
+#define PARSE_FLAG_TOK_NUM    0x0002
+#define PARSE_FLAG_LINEFEED   0x0004
+#define PARSE_FLAG_ASM_FILE   0x0008
+#define PARSE_FLAG_SPACES     0x0010
+#define PARSE_FLAG_ACCEPT_STRAYS 0x0020
+#define PARSE_FLAG_TOK_STR    0x0040
+\end{verbatim}
+
+\subsubsection{BufferedFile *file}
+
+\subsubsection{ch and tok}
+
+\subsubsection{tokc}
+
+\subsubsection{macro\_ptr}
+
+\subsubsection{tok\_ident}
+

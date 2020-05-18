@@ -1,0 +1,93 @@
+\documentclass[11pt, oneside]{book}              % Book class in 11 points
+\usepackage[T1]{fontenc}
+\parindent0pt  \parskip10pt             % make block paragraphs
+\raggedright                            % do not right justify
+
+% use \verbatim{} instead of lstlisting.
+%\usepackage{listings}
+%\lstset{
+%        keepspaces=true,
+%        numbers=left,
+%        numbersep=10pt,
+%        language=C,
+%}
+
+
+% use this when embedding codes
+\newenvironment{tcc_desc}
+        {\everypar{\hangafter=1 \setlength{\hangindent}{3em}}} % begin-code
+        {\par}  % end-code
+
+
+\title{\bf The Tiny C Compiler by Fabrice Bellard}    % Supply information
+\author{Niel Anthony E Acuna}              %   for the title page.
+\date{\today}                           %   Use current date. 
+
+
+\includeonly{
+        introduction,
+        memory,
+        tokens,
+        symbols,
+        string,
+        dynarrays,
+        preprocess,
+        lexer,
+}
+
+% Note that book class by default is formatted to be printed back-to-back.
+\begin{document}                        % End of preamble, start of text.
+\frontmatter                            % only in book class (roman page #s)
+\maketitle                              % Print title page.
+\tableofcontents                        % Print table of contents
+
+
+
+
+\mainmatter                             % only in book class (arabic page #s)
+
+
+\part{Introduction}                   % Print a "part" heading
+
+\include{introduction}
+
+\part{Tiny C Compiler}
+
+\include{memory}
+
+\include{string}
+
+\include{dynarrays}
+
+\chapter{Filename Processing}
+
+\chapter{BufferedFile}
+
+\chapter{The TCC State Object}
+
+\chapter{Error Processing}
+
+\part{Lexical Analysis}
+
+In compiler parlance, lexical analysis is the process of breaking down a sequence of characters or in our case, a C source code into a collection of basic language elements called tokens.
+
+\include{tokens}
+
+\include{lexer}
+
+\part{Parsing}
+
+\include{symbols}
+
+\include{preprocess}
+
+\part{Code Generation}
+
+\part{Auxilliary Modules}
+
+\chapter{Options Processing}
+
+\chapter{Makefile}
+
+\end{document}                          % The required last line
+

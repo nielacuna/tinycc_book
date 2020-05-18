@@ -1,0 +1,190 @@
+
+\chapter{Preprocessing}
+
+say something about the Preprocessing stage of compilation here.
+
+\section{The define stack}
+
+explain what the define stack is.
+
+
+The function \verb|define_push()| is used to add to the define stack. It does this by first associating a lexeme to a symbol object, then associating this symbol to a token. This symbol object can only be one of two kinds of macro types \verb|MACRO_OBJ| or \verb|MACRO_FUNC|.
+
+
+\begin{verbatim}
+1317 ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
+1318 {
+1319     Sym *s, *o;
+1320
+1321     o = define_find(v);
+1322     s = sym_push2(&define_stack, v, macro_type, 0);
+1323     s->d = str;
+1324     s->next = first_arg;
+1325     table_ident[v - TOK_IDENT]->sym_define = s;
+1326 
+1327     if (o && !macro_is_equal(o->d, s->d))
+1328         tcc_warning("%s redefined", get_tok_str(v, NULL));
+1329 }
+\end{verbatim}
+\begin{tcc_desc}
+\textbf{v} \verb|v| is the token for the identifier.
+
+\textbf{macro\_type} there are only two kinds of macros - \verb|MACRO_OBJ| which is used to describe object-like macros, and \verb|MACRO_FUNC| which describes function like macrosses. 
+
+\textbf{str} the lexeme associated with this token.
+
+\textbf{first\_arg} first\_arg param
+
+\textbf{line 1325} the token to this was already allocated and added prior to the same index via \verb|tok_alloc_new()|
+
+\end{tcc_desc}
+
+\section{Finding a define}
+\begin{verbatim}
+ST_INLN Sym *define_find(int v)
+{
+    v -= TOK_IDENT;
+    if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+        return NULL;
+    return table_ident[v]->sym_define;
+}
+\end{verbatim}
+
+
+\section{Defining Object-Like Macros}
+
+the tokenizer sees the '\#' character and determines that a preprocessing operation would be happening next. the tokenizer gets called for the second time to extract the next few characters - "define" in this case and a hash table
+index is computed using the characters. the symbol entry for "define" is searched in the hash table and naturally, it will be found, so a new token will not be allocated, but instead, a reference to the symbol for "define" will be returned.
+
+the global tok variable is set to the token id for "define" so it can be used by other parts of the compiler.
+
+the tokenizer is called for the third time to extract the macro identifier. A new token symbol is created for this identifer and it is added to the hash table.
+
+the global tok variable is set to the token id for this indentifier now.
+
+now it is time to parse the object-like macro. the function parse\_define() is called to do this.
+
+the tokenizer is called a fourth time to extract the value now. when tok is TOK\_PPNUM, the global variable tokc holds the token value and the global tok holds TOK\_PPNUM . TOK\_PPNUM is obviously not a space and the function tok\_str\_add2() to be called so that token id, length of the toke, and value of the token will be appended to the global token string tokstr\_buf.
+
+tok\_str\_add2() utilizes the global tok value to do its operation and when it sees that it is looking at at TOK\_PPNUM token, it will consult the global CValue to extract the actual value.
+
+a last call to the tokenizer will simply update the internal tracking of the tokenizer to point to next line.
+
+
+
+
+% preprocessing-token: pp-number
+
+% pp-number:
+%       digit
+%       . digit
+%       pp-number digit
+%       pp-number identifier-nondigit
+%       pp-number e sign
+%       pp-number E sign
+%       pp-number p sign
+%       pp-number P sign
+%       pp-number .
+
+% defining simple ints
+% simple ints fall under the digit production rule 
+
+% c => peeked character 
+% t => former character
+%
+% t is already checked to be valid. (initially it is checked to be a number)
+% now check if the peeked character is also valid.
+% 
+% (!(         (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM)) // check if peeked char is a number. => digit production rule
+%          || c == '.'                                     // if peeked char is not a number, is it a decimal sign? => pp-number . production rule
+
+
+%             // if peeked char is a sign '+' or '-', 
+%             // then the former must be 'e' or 'E'       +e or +E => e sign or E sign production rule
+%             // or 'p' or 'P'                            +p or +P => p sign or P sign production rule
+%          || ( (c == '+' || c == '-') && (     (    (t == 'e' || t == 'E')
+%                                                 && !(parse_flags & PARSE_FLAG_ASM_FILE && ((char*)tokcstr.data)[0] == '0' && toup(((char*)tokcstr.data)[1]) == 'X')
+%                                               )
+%                                            || t == 'p' || t == 'P'
+%                                         )
+%             )
+%    )
+% )
+
+
+\begin{verbatim}
+1478 ST_FUNC void parse_define(void)
+1479 {
+1480     Sym *s, *first, **ps;
+1481     int v, t, varg, is_vaargs, spc;
+1482     int saved_parse_flags = parse_flags;
+1483
+1484     v = tok;
+1485     if (v < TOK_IDENT || v == TOK_DEFINED)
+1486         tcc_error("invalid macro name '%s'", get_tok_str(tok, &tokc));
+1487     /* XXX: should check if same macro (ANSI) */
+1488     first = NULL;
+1489     t = MACRO_OBJ;
+....    
+1494     parse_flags = ((parse_flags & ~PARSE_FLAG_ASM_FILE) | PARSE_FLAG_SPACES);
+....    
+1496     next_nomacro_spc();
+1497     if (tok == '(') {
+....
+1527     }
+1528
+1529     tokstr_buf.len = 0;
+1530     spc = 2;
+1531     parse_flags |= PARSE_FLAG_ACCEPT_STRAYS | PARSE_FLAG_SPACES | PARSE_FLAG_LINEFEED;
+....
+1537     while (tok != TOK_LINEFEED && tok != TOK_EOF) {
+1538         /* remove spaces around ## and after '#' */
+1539         if (TOK_TWOSHARPS == tok) {
+1540             if (2 == spc)
+1541                 goto bad_twosharp;
+1542             if (1 == spc)
+1543                 --tokstr_buf.len;
+1544             spc = 3;
+1545             tok = TOK_PPJOIN;
+1546         } else if ('#' == tok) {
+1547             spc = 4;
+1548         } else if (check_space(tok, &spc)) {
+1549             goto skip;
+1550         }
+1551         tok_str_add2(&tokstr_buf, tok, &tokc);
+1552     skip:
+1553         next_nomacro_spc();
+1554     }
+1555
+1556     parse_flags = saved_parse_flags;
+1557     if (spc == 1)
+1558         --tokstr_buf.len; /* remove trailing space */
+1559     tok_str_add(&tokstr_buf, 0);
+1560     if (3 == spc)
+1561 bad_twosharp:
+1562         tcc_error("'##' cannot appear at either end of macro");
+1563     define_push(v, t, tok_str_dup(&tokstr_buf), first);
+1564 }
+\end{verbatim}
+
+
+
+\section{Defining Function-Like Macros}
+
+\section{Undefining}
+
+\section{Including Files}
+
+\section{Error}
+
+\section{Pragmas}
+
+\section{Conditional Preprocessing}
+
+\subsubsection{Ifdef}
+\subsubsection{Ifndef}
+\subsubsection{Elif}
+
+\subsubsection{Ending a Conditional Block}
+
+

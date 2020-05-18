@@ -1,0 +1,91 @@
+\chapter{String Management}
+
+
+\section{The CString Object}
+
+CStrings are TCC implementations of raw C strings (character arrays). Because 
+Raw C strings are usually tags or pointers to contiguous regions of memory,
+dynamically resizing them (more commonly, enlarging them) is tedious. A new
+larger memory block needs to be allocated and the old string copied to this new
+block. Care must be taken so that the new larger block of memory is large enough
+for the new additions to the string to be added safely. Also, the old memory
+address of the string must be \verb|free()|'d back to the platform so it can be reused.
+
+It is declared as follows in <tcc.h>.
+\begin{verbatim}
+425 typedef struct CString {
+426     int size;
+427     void *data;
+428     int size_allocated;
+429 } CString;
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{size} The current memory usage of the CString object - which is also the current string length not counting the terminating NULL. This must always be less than or equal to the \verb|size_allocated| member field.
+
+\textbf{data} This is a pointer to the memory region containing the raw C string.
+
+\textbf{size\_allocated} Describes the maximum growable size of the CString. This is not the actual size of the string, that is what the \verb|size| member field is for. The CString is usually reallocated to a bigger memory when it is determined that future concatenations to the string will overflow \verb|size_allocated| soon.
+\end{tcc_desc}
+
+\subsection{Creating CStrings}
+
+\begin{verbatim}
+370 ST_FUNC void cstr_new(CString *cstr)
+371 {
+372     memset(cstr, 0, sizeof(CString));
+373 }
+\end{verbatim}
+CString objects start their life as an empty string. They don't hold any strings at all and subsequently have a length of 0. This function ensures the CString is in a known state before even the first string is assigned to it.
+
+\subsection{Destroying CStrings}
+
+\begin{verbatim}
+ST_FUNC void cstr_free(CString *cstr)
+{
+    tcc_free(cstr->data);
+    cstr_new(cstr);
+}
+\end{verbatim}
+free string and reset it to NULL.
+
+\subsection{Resetting CStrings}
+
+*** ST\_FUNC void cstr\_reset(CString *cstr)
+reset string to empty.
+
+\subsection{Concatenating a single Character}
+
+*** ST\_INLN void cstr\_ccat(CString *cstr, int ch)
+add a byte. reallocate memory if needed.
+
+\subsection{Concatenating a string to a CString}
+
+*** ST\_FUNC void cstr\_cat(CString *cstr, const char *str, int len)
+add a range of bytes, range is defined by len parameter
+
+\subsection{Formatted Concatenation to CStrings}
+
+*** ST\_FUNC int cstr\_printf(CString *cstr, const char *fmt, ...)
+provides a way to continuously append strings to a CString.
+
+
+ST\_FUNC void parse\_mult\_str (CString *astr, const char *msg)
+
+
+\section{Other String Handling Patterns}
+
+tcc\_split\_path()
+
+
+
+/* copy a string and truncate it. */
+ST\_FUNC char *pstrcpy(char *buf, size\_t buf\_size, const char *s)
+
+
+/* strcat and truncate. */
+ST\_FUNC char *pstrcat(char *buf, size\_t buf\_size, const char *s)
+
+
+ST\_FUNC char *pstrncpy(char *out, const char *in, size\_t num)
+
