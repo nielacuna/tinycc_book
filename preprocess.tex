@@ -53,7 +53,7 @@ ST_INLN Sym *define_find(int v)
 
 \section{Defining Object-Like Macros}
 
-the tokenizer sees the '\#' character and determines that a preprocessing operation would be happening next. the tokenizer gets called for the second time to extract the next few characters - "define" in this case and a hash table
+The tokenizer sees the '\#' character and determines that a preprocessing operation would be happening next. the tokenizer gets called for the second time to extract the next few characters - "define" in this case and a hash table
 index is computed using the characters. the symbol entry for "define" is searched in the hash table and naturally, it will be found, so a new token will not be allocated, but instead, a reference to the symbol for "define" will be returned.
 
 the global tok variable is set to the token id for "define" so it can be used by other parts of the compiler.
@@ -68,7 +68,7 @@ the tokenizer is called a fourth time to extract the value now. when tok is TOK\
 
 tok\_str\_add2() utilizes the global tok value to do its operation and when it sees that it is looking at at TOK\_PPNUM token, it will consult the global CValue to extract the actual value.
 
-a last call to the tokenizer will simply update the internal tracking of the tokenizer to point to next line.
+A last call to the tokenizer will simply update the internal tracking of the tokenizer to point to next line.
 
 
 
@@ -111,6 +111,76 @@ a last call to the tokenizer will simply update the internal tracking of the tok
 %    )
 % )
 
+% the . digit production rule is handled by the case '.' ....
+
+
+when the macro is just a simple int value:
+        set the global variable to hold a constant value \verb|tokc|
+        tokc.size = \# of digits
+        tokc.data = simple int in string form
+        tok = TOK\_PPNUM
+
+
+\subsubsection{Transferring a Constant Value to a string}
+
+The global variable \verb|tokc| holds a valid constant value when the global \verb|tok| value is \verb|TOK_PPNUM|. Outlined below are the specific lines of \verb|tok_str_add2()| function handling a \verb|TOK_PPNUM| token.
+
+\begin{verbatim}
+1145 static void tok_str_add2(TokenString *s, int t, CValue *cv)
+1146 {
+1147     int len, *str;
+1148 
+1149     len = s->lastlen = s->len;
+1150     str = s->str;
+1151 
+1152     /* allocate space for worst case */
+1153     if (len + TOK_MAX_SIZE >= s->allocated_len)
+1154         str = tok_str_realloc(s, len + TOK_MAX_SIZE + 1);
+1155     str[len++] = t;
+         ...
+1169     case TOK_PPNUM:
+1170     case TOK_PPSTR:
+1171     case TOK_STR:
+1172     case TOK_LSTR:
+1173         {
+1174             /* Insert the string into the int array. */
+1175             size_t nb_words =
+1176                 1 + (cv->str.size + sizeof(int) - 1) / sizeof(int);
+1177             if (len + nb_words >= s->allocated_len)
+1178                 str = tok_str_realloc(s, len + nb_words + 1);
+1179             str[len] = cv->str.size;
+1180             memcpy(&str[len + 1], cv->str.data, cv->str.size);
+1181             len += nb_words;
+1182         }
+1183         break;
+1212     default:
+1213         break;
+1214     }
+1215     s->len = len;
+1216 }
+\end{verbatim}
+
+\begin{tcc_desc}
+        \textbf{line 1149} s->len is counted in terms of words, not byte.
+
+        \textbf{line 1149-1150} local references to TokenString object.
+
+        \textbf{line 1153-1154} resize (enlarge) the TokenString object buffer so it can fit more data.
+
+        \textbf{line 1155} field 0 when representing a PPNUM holds the token.
+
+        \textbf{line 1169-1172} all of these 4 token types have the same handling.
+
+        \textbf{line 1175-1178} \verb|tok_str_realloc()| allocates in terms of the system integer width (usually 4 bytes, also called a "word"). This line computes the number of words necessary to cover the string length. e.g. if string length is 3, then we only need 1 word. If however we have a string length of 5, then it rounds up the word count to 2. Additionally, +1 word is added to be able to save the string length itself into field 1.
+
+        \textbf{line 1179} field 1 is used to store the string length.
+
+        \textbf{line 1180} the actual string gets copied here into field 2.
+
+        \textbf{line 1181 and line 1215} reflect the new length now.
+\end{tcc_desc}
+
+It is important to remember that TokenString keeps strings as an array of words (or ints) which is usually 4 bytes. Therefore, the length field inside a TokenString object is not the actual string length. Instead, it reflects the length of the buffer in terms of words.
 
 \begin{verbatim}
 1478 ST_FUNC void parse_define(void)
@@ -170,6 +240,61 @@ a last call to the tokenizer will simply update the internal tracking of the tok
 
 
 \section{Defining Function-Like Macros}
+
+
+\section{Finding a define Identifier}
+
+The function \verb|define_find()| returns a reference to the symbol object associated with a token \verb|v|. It is outlined below with explanation.
+
+\begin{verbatim}
+ST_INLN Sym *define_find(int v)
+{
+    v -= TOK_IDENT;
+    if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+        return NULL;
+    return table_ident[v]->sym_define;
+}
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 244} normalize the token in reference to \verb|TOK_IDENT|.
+
+\textbf{line 245-246} The global token counter \verb|tok_ident| is the source for all token numbers. Therefore, a valid token is always less than the global token counter (that is normalized in reference to \verb|TOK_IDENT|) which is what is checked here. Anything greater than, is obviously a non-existent token as far as TinyCC is concerned.
+
+\textbf{line 247} return the define tokensymbol for token \verb|v|.
+\end{tcc_desc}
+
+
+\section{Registering a define macro to the system - The Define Stack}
+
+The define stack where define symbols are pushed as they are discovered. The function to push new macrosses to the TinyCC define stack is \verb|define_push()|. It is outlined below and explained line by line.
+
+\begin{verbatim}
+1317 ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
+1318 {
+1319     Sym *s, *o;
+1320
+1321     o = define_find(v);
+1322     s = sym_push2(&define_stack, v, macro_type, 0);
+1323     s->d = str;
+1324     s->next = first_arg;
+1325     table_ident[v - TOK_IDENT]->sym_define = s;
+1326
+1327     if (o && !macro_is_equal(o->d, s->d))
+1328         tcc_warning("%s redefined", get_tok_str(v, NULL));
+1329 }
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 1321} return a reference to this identifier - if has been defined prior.
+
+\textbf{line 1322-1324} create and push a new define symbol now onto the define stack \verb|define_stack|. Initialize this symbol with additional information pertaining to the macro the compiler just parsed.
+
+\textbf{line 1325} store a reference to this actual symbol now inside the token symbol table.
+
+\textbf{line 1327-1328} detect if this particular macro identifier has already been prior. Then, alert user of the fact.
+
+\end{tcc_desc}
 
 \section{Undefining}
 

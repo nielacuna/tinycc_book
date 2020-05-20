@@ -1,8 +1,97 @@
 
 \chapter{Symbols}
+Symbols are TinyCC representations of various entities like variable names, function names and other objects.
 
-a symbol has a type, and has a value.
 
+\section{The symbol pool}
+Symbols are allocated from a symbol pool. And the symbol pool is inside a dynamically enlarged collection of symbol pools. The function \verb|__sym_malloc()| takes care of managing this collection. It is explained further below.
+
+\begin{verbatim}
+tccgen.c
+40 static Sym *sym_free_first;
+41 static void **sym_pools;
+42 static int nb_sym_pools;
+\end{verbatim}
+\begin{tcc_desc}
+\textbf{line 40} The next sym object to be given away.
+
+\textbf{line 41} Collection of sym pools array.
+
+\textbf{line 42} Count of pools in the sym pools array.
+\end{tcc_desc}
+
+\subsection{Allocating/Enlarging the symbol pool}
+
+\begin{verbatim}
+691 static Sym *__sym_malloc(void)
+692 {
+693     Sym *sym_pool, *sym, *last_sym;
+694     int i;
+695 
+696     sym_pool = tcc_malloc(SYM_POOL_NB * sizeof(Sym));
+697     dynarray_add(&sym_pools, &nb_sym_pools, sym_pool);
+698
+699     last_sym = sym_free_first;
+700     sym = sym_pool;
+701     for(i = 0; i < SYM_POOL_NB; i++) {
+702         sym->next = last_sym;
+703         last_sym = sym;
+704         sym++;
+705     }
+706     sym_free_first = last_sym;
+707     return last_sym;
+708 }
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 696} Allocate a pool of symbols.
+
+\textbf{line 697} Add this new pool to the sym pools array.
+
+\textbf{line 699} Save a reference to the last sym on the current sym pool.
+
+\textbf{line 700-705} Link all the symbols in this new sym pool together. This is a backwards pointing singly linked list of free sym objects.
+
+\textbf{line 706-707} Return a reference to the first (actually the last) sym object in this pool.
+\end{tcc_desc}
+
+\subsection{Allocating a symbol}
+Symbols are allocated from a pre-allocated pool of syms. The next free sym to give out is simply the next sym object in a singly linked list of free syms as shown below inside the \verb|sym_malloc()|.
+
+
+\begin{verbatim}
+710 static inline Sym *sym_malloc(void)
+711 {
+712     Sym *sym;
+713 #ifndef SYM_DEBUG
+714     sym = sym_free_first;
+715     if (!sym)
+716         sym = __sym_malloc();
+717     sym_free_first = sym->next;
+718     return sym;
+719 #else
+720     sym = tcc_malloc(sizeof(Sym));
+721     return sym;
+722 #endif
+723 }
+\end{verbatim}
+\begin{tcc_desc}
+\textbf{line 714} Get a reference to the next free sym object in the current sym pool.
+
+\textbf{line 715-716} If the current sym pool has been exhausted, allocate a new pool.
+
+\textbf{line 717} Set up the next sym object to be given out next time a symbol is requested to be allocated.
+
+\textbf{line 718} Return reference to this newly "allocated" symbol.
+\end{tcc_desc}
+
+\section{Freeing a symbol}
+
+\section{Pushing a symbol}
+
+\section{Popping a symbol}
+
+\section{Finding a symbol}
 
 \begin{verbatim}
 736 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c)
@@ -21,16 +110,20 @@ a symbol has a type, and has a value.
 749 }
 \end{verbatim}
 
-\subsection{The Symbol Table}
+\section{Symbol Stacks}
 
+\subsection{The define\_stack}
 
+\subsection{The global\_stack}
 
-*** the include stack
+\subsection{The local\_stack}
 
-*** the define stack
+\subsection{The global\_label\_stack}
 
-*** the ifdef stack
+\section{The local\_label\_stack}
 
-*** the pack stack
+%\subsection{The ifdef Stack}
+
+%\subsection{The pack Stack}
 
 
