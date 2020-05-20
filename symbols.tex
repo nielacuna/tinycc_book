@@ -58,7 +58,6 @@ tccgen.c
 \subsection{Allocating a symbol}
 Symbols are allocated from a pre-allocated pool of syms. The next free sym to give out is simply the next sym object in a singly linked list of free syms as shown below inside the \verb|sym_malloc()|.
 
-
 \begin{verbatim}
 710 static inline Sym *sym_malloc(void)
 711 {
@@ -83,15 +82,130 @@ Symbols are allocated from a pre-allocated pool of syms. The next free sym to gi
 \textbf{line 717} Set up the next sym object to be given out next time a symbol is requested to be allocated.
 
 \textbf{line 718} Return reference to this newly "allocated" symbol.
+
+\textbf{line 720-721} This is the slow and more resource intensive symbol allocation. Allocate symbol objects individually when requested.
 \end{tcc_desc}
 
 \section{Freeing a symbol}
+This API is never used in TinyCC. Freeing a symbol is fast as it involves simply appending a sym object at the front of the sym pool. 
 
-\section{Pushing a symbol}
+\begin{verbatim}
+725 ST_INLN void sym_free(Sym *sym)
+726 {
+727 #ifndef SYM_DEBUG
+728     sym->next = sym_free_first;
+729     sym_free_first = sym;
+730 #else
+731     tcc_free(sym);
+732 #endif
+733 }
+\end{verbatim}
+
+\begin{tcc_desc}
+\textbf{line 728-729} Append \verb|sym| to the front of the free sym pool.
+
+\textbf{line 731} This is the slow and more resource intensive symbol freeing path.
+\end{tcc_desc}
+
+\section{Registering Symbols to the Compiler System}
+
+\subsection{Lowlevel push}
+\begin{verbatim}
+736 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c)
+737 {
+738     Sym *s;
+739
+740     s = sym_malloc();
+741     memset(s, 0, sizeof *s);
+742     s->v = v;
+743     s->type.t = t;
+744     s->c = c;
+745     /* add in stack */
+746     s->prev = *ps;
+747     *ps = s;
+748     return s;
+749 }
+\end{verbatim}
+\begin{tcc_desc}
+\textbf{line 740-741} Allocate new zeroed symbol. 
+
+\textbf{line 742} Associate this symbol with a token. The token will hold the name of this symbol.
+
+\textbf{line 743} Give this symbol a type.
+
+\textbf{line 744} Constant or numerical value associated with this symbol.
+
+\textbf{line 745-747} As the comment implies, add this symbol onto chosen stack \verb|ps|.
+
+\textbf{line 748} return a pointer to this newly created symbol.
+\end{tcc_desc}
+
+\subsection{Pushing a symbol}
+
+\begin{verbatim}
+792 ST_FUNC Sym *sym_push(int v, CType *type, int r, int c)
+793 {
+794     Sym *s, **ps;
+795     TokenSym *ts;
+796
+797     if (local_stack)
+798         ps = &local_stack;
+799     else
+800         ps = &global_stack;
+801     s = sym_push2(ps, v, type->t, c);
+802     s->type.ref = type->ref;
+803     s->r = r;
+804     /* don't record fields or anonymous symbols */
+805     /* XXX: simplify */
+806     if (!(v & SYM_FIELD) && (v & ~SYM_STRUCT) < SYM_FIRST_ANOM) {
+807         /* record symbol in token array */
+808         ts = table_ident[(v & ~SYM_STRUCT) - TOK_IDENT];
+809         if (v & SYM_STRUCT)
+810             ps = &ts->sym_struct;
+811         else
+812             ps = &ts->sym_identifier;
+813         s->prev_tok = *ps;
+814         *ps = s;
+815         s->sym_scope = local_scope;
+816         if (s->prev_tok && sym_scope(s->prev_tok) == s->sym_scope)
+817             tcc_error("redeclaration of '%s'",
+818                 get_tok_str(v & ~SYM_STRUCT, NULL));
+819     }
+820     return s;
+821 }
+\end{verbatim}
+
+\begin{tcc_desc}
+\end{tcc_desc}
+
 
 \section{Popping a symbol}
 
 \section{Finding a symbol}
+
+\begin{verbatim}
+ST_INLN Sym *sym_find(int v)
+{
+    v -= TOK_IDENT;
+    if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
+        return NULL;
+    return table_ident[v]->sym_identifier;
+}
+\end{verbatim}
+
+\begin{verbatim}
+ST_FUNC Sym *sym_find2(Sym *s, int v)
+{
+    while (s) {
+        if (s->v == v)
+            return s;
+        else if (s->v == -1)
+            return NULL;
+        s = s->prev;
+    }
+    return NULL;
+}
+\end{verbatim}
 
 \begin{verbatim}
 736 ST_FUNC Sym *sym_push2(Sym **ps, int v, int t, int c)

@@ -46,7 +46,7 @@ While C language reserved keywords like int, void, inline and etc have their val
 
 The token table is a dynamically allocated \verb|tokensym| pointer array that can be enlarged during runtime to be able to accomodate new additional tokens as they are discovered. 
 
-Building the table is a two step process. The first part of the table is constructed early during TCC startup. Care is taken so that the statically allocated tokens are placed in the table with their token identifiers intact - that is, the token numbers that were assigned for them during building of the TinyCC compiler itself are not changed, relative to \verb|TOK_IDENT|. The code is elaborated inside the \verb|tccpp_new()| function below.
+Building the table is a two step process. The first part of the table is constructed early during TCC startup. Care is taken so that the statically allocated tokens are placed in the table with their token identifiers intact - that is, the token numbers that were assigned for them during building of the TinyCC compiler itself are not changed, relative to \verb|TOK_IDENT|. This means those same static tokens have constant token numberings, e.g. \verb|TOK_INIT| will always be 256. The code is elaborated inside the \verb|tccpp_new()| function below.
 
 \begin{verbatim}
 3667     tok_ident = TOK_IDENT;
@@ -95,7 +95,38 @@ Each token is ofcourse associated with a string. Let's inspect how \verb|tcc_key
 \textbf{62} \verb|DEF()| macro's purpose has been fulfilled, undefine it so it can be reused in the future.
 \end{tcc_desc}
 
+
+\subsection{TokenStrings and Management of TokenStrings}
+
+Used to record constant values and function macroses.
+
+\subsubsection{Creation and Initialization of a TokenString}
+
+TokenStrings are always created empty and simply just enlarged during runtime as the need arises.
+
+\subsubsection{Duplicating a TokenString}
+
+\subsubsection{Destroying a TokenString}
+
+\subsubsection{Growing the string buffer inside a TokenString Dynamically}
+
+\subsubsection{Adding a new token to a TokenString}
+
+
+\subsubsection{Adding new Constant to a TokenString}
+
+\subsection{TokenString Macros}
+
+\subsubsection{Beginning a Macro}
+
+\subsubsection{Ending a Macro}
+
+
+
 \subsection{Adding new tokens to the system}
+
+
+
 
 \subsubsection{The Token Table}
 
@@ -240,3 +271,14 @@ The \verb|tok_alloc_new| function is a lowlevel API that requires a token hash s
 
 \subsubsection{tok\_ident}
 
+\section{How it all fits in}
+
+Given a lexeme (or identifier) in a source code, it is important to find the dynamically assigned token numbering that was associated with it during parsing. It is this token number that will connect us to all the information that was gleaned for this identifier. For example, is this identifier a macro? or a global variable? or a function? 
+
+The token number assigned for this identifier is found in the TokenSym object that was created for it. 
+
+How do we find the TokenSym for this lexeme? Well, we compute a hash bucket index, and find the TokenSym in the token hash table.
+
+The \verb|tok| member of the \verb|TokenSym| structure is what we need. We take this \verb|tok| value and normalize it by subtracting it with \verb|TOK_IDENT| so we can have a valid \verb|table_ident| index.
+
+Now that we have the \verb|TokenSym| object for this identifier (lexeme), we now have access to the actual symbol that will actually give it more context - e.g. if this identifier was defined as an macro-object, what constant value does it hold? is this contant value an int? or a float? This is all recorded in the \verb|Sym| that was also created for this identifier.

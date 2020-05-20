@@ -60,7 +60,7 @@ the global tok variable is set to the token id for "define" so it can be used by
 
 the tokenizer is called for the third time to extract the macro identifier. A new token symbol is created for this identifer and it is added to the hash table.
 
-the global tok variable is set to the token id for this indentifier now.
+the global tok variable is set to the token id for this indentifier.
 
 now it is time to parse the object-like macro. the function parse\_define() is called to do this.
 
@@ -266,8 +266,7 @@ ST_INLN Sym *define_find(int v)
 
 
 \section{Registering a define macro to the system - The Define Stack}
-
-The define stack where define symbols are pushed as they are discovered. The function to push new macrosses to the TinyCC define stack is \verb|define_push()|. It is outlined below and explained line by line.
+The define stack where define symbols are pushed as they are discovered. The function to push new macro symbols to the TinyCC define stack is \verb|define_push()|. It is outlined below and explained line by line.
 
 \begin{verbatim}
 1317 ST_INLN void define_push(int v, int macro_type, int *str, Sym *first_arg)
@@ -288,12 +287,11 @@ The define stack where define symbols are pushed as they are discovered. The fun
 \begin{tcc_desc}
 \textbf{line 1321} return a reference to this identifier - if has been defined prior.
 
-\textbf{line 1322-1324} create and push a new define symbol now onto the define stack \verb|define_stack|. Initialize this symbol with additional information pertaining to the macro the compiler just parsed.
+\textbf{line 1322-1324} create and push a new symbol now onto the define stack \verb|define_stack|. Initialize this symbol with additional information pertaining to the macro the compiler just parsed.
 
 \textbf{line 1325} store a reference to this actual symbol now inside the token symbol table.
 
 \textbf{line 1327-1328} detect if this particular macro identifier has already been prior. Then, alert user of the fact.
-
 \end{tcc_desc}
 
 \section{Undefining}
