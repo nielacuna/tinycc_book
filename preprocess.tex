@@ -53,23 +53,28 @@ ST_INLN Sym *define_find(int v)
 
 \section{Defining Object-Like Macros}
 
-The tokenizer sees the '\#' character and determines that a preprocessing operation would be happening next. the tokenizer gets called for the second time to extract the next few characters - "define" in this case and a hash table
-index is computed using the characters. the symbol entry for "define" is searched in the hash table and naturally, it will be found, so a new token will not be allocated, but instead, a reference to the symbol for "define" will be returned.
 
-the global tok variable is set to the token id for "define" so it can be used by other parts of the compiler.
+\begin{enumerate}
+\item The tokenizer sees the \emph{\#} character and determines that a preprocessing operation would be happening next. The global \verb|tok| variable is set to \emph{\#}.
 
-the tokenizer is called for the third time to extract the macro identifier. A new token symbol is created for this identifer and it is added to the hash table.
+\item The tokenizer gets called for the second time to extract the next few characters \emph{define}. A hash table index is computed using these characters.
 
-the global tok variable is set to the token id for this indentifier.
+\item The symbol entry for \emph{define} is searched in the hash table and naturally, it will be found, so a new \verb|TokenSym| will not be allocated, but instead, a reference to the \verb|TokenSym| for \emph{define} will be returned.
 
-now it is time to parse the object-like macro. the function parse\_define() is called to do this.
+\item \verb|TokenSym| for each identifier contains references to all the information you ever need to deal with that identifier. Infact, each \verb|TokenSym| also holds the tok number dynamically assigned for this particular token. The global \verb|tok| variable is set to the token number assigned to \emph{define} so it can be used by other parts of the compiler.
 
-the tokenizer is called a fourth time to extract the value now. when tok is TOK\_PPNUM, the global variable tokc holds the token value and the global tok holds TOK\_PPNUM . TOK\_PPNUM is obviously not a space and the function tok\_str\_add2() to be called so that token id, length of the toke, and value of the token will be appended to the global token string tokstr\_buf.
+\item The tokenizer is called for the third time to extract the macro identifier - the string after \emph{define}. The preprocessor will determine if this identifier has already been registered or not. If not, a new \verb|TokenSym| is created for this identifer and it is added to the hash table. Remember that every new \verb|TokenSym| is already assigned a token number too and this is stored on the \verb|TokenSym| created for this identifier.
 
-tok\_str\_add2() utilizes the global tok value to do its operation and when it sees that it is looking at at TOK\_PPNUM token, it will consult the global CValue to extract the actual value.
+\item The global \verb|tok| variable is set to the token number for this indentifier. The lexer at this point has now extracted three tokens from a single preprocessing line. The \emph{\#} symbol, the \emph{define} string, and third, the \emph{identifier}.
 
-A last call to the tokenizer will simply update the internal tracking of the tokenizer to point to next line.
+\item Now it is time to process what is referred to as \emph{pp-tokens} or preprocessing tokens. The function \verb|parse_define()| is called to do this. \emph{pp-tokens} can be things like simple integers, string literals, even floating points and even numbers in scientific notation.
 
+\item The tokenizer is called a fourth time to extract the next token now. Depending on what it encounters the global \verb|tok| value is set again to reflect the next token. For example, if a string literal is detected - e.g. a string enclosed in double quotes, \verb|tok| is set to \verb|PP_STR|. If a plain-old integer number is detected that \verb|tok| gets set to \verb|TOK_PPNUM|.
+
+\item Ultimately, a new define symbol is created and pushed to the define stack via \verb|define_push()|. This new define symbol is linked properly to the token for the identifer as well.
+
+
+\end{enumerate}
 
 
 
@@ -293,6 +298,36 @@ The define stack where define symbols are pushed as they are discovered. The fun
 
 \textbf{line 1327-1328} detect if this particular macro identifier has already been prior. Then, alert user of the fact.
 \end{tcc_desc}
+
+
+\subsection{Explaining the preprocessing tokens}
+
+\subsubsection{TOK\_CCHAR}
+\subsubsection{TOK\_LCHAR}
+\subsubsection{TOK\_CINT}
+\subsubsection{TOK\_CUINT}
+\subsubsection{TOK\_CLLONG}
+\subsubsection{TOK\_CULLONG}
+\subsubsection{TOK\_STR}
+\subsubsection{TOK\_LSTR}
+\subsubsection{TOK\_CFLOAT}
+\subsubsection{TOK\_CDOUBLE}
+\subsubsection{TOK\_CLDOUBLE}
+\subsubsection{TOK\_PPNUM}
+
+When tok is TOK\_PPNUM, the global variable tokc holds the token value and the global tok holds TOK\_PPNUM . TOK\_PPNUM is obviously not a space and the function tok\_str\_add2() to be called so that token id, length of the toke, and value of the token will be appended to the global token string tokstr\_buf.
+
+tok\_str\_add2() utilizes the global tok value to do its operation and when it sees that it is looking at at TOK\_PPNUM token, it will consult the global CValue to extract the actual value.
+
+A last call to the tokenizer will simply update the internal tracking of the tokenizer to point to next line.
+\subsubsection{TOK\_PPSTR}
+\subsubsection{TOK\_LINENUM}
+\subsubsection{TOK\_TWODOTS}
+
+
+
+
+
 
 \section{Undefining}
 
