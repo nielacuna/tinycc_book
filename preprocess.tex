@@ -80,41 +80,6 @@ ST_INLN Sym *define_find(int v)
 
 % preprocessing-token: pp-number
 
-% pp-number:
-%       digit
-%       . digit
-%       pp-number digit
-%       pp-number identifier-nondigit
-%       pp-number e sign
-%       pp-number E sign
-%       pp-number p sign
-%       pp-number P sign
-%       pp-number .
-
-% defining simple ints
-% simple ints fall under the digit production rule 
-
-% c => peeked character 
-% t => former character
-%
-% t is already checked to be valid. (initially it is checked to be a number)
-% now check if the peeked character is also valid.
-% 
-% (!(         (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM)) // check if peeked char is a number. => digit production rule
-%          || c == '.'                                     // if peeked char is not a number, is it a decimal sign? => pp-number . production rule
-
-
-%             // if peeked char is a sign '+' or '-', 
-%             // then the former must be 'e' or 'E'       +e or +E => e sign or E sign production rule
-%             // or 'p' or 'P'                            +p or +P => p sign or P sign production rule
-%          || ( (c == '+' || c == '-') && (     (    (t == 'e' || t == 'E')
-%                                                 && !(parse_flags & PARSE_FLAG_ASM_FILE && ((char*)tokcstr.data)[0] == '0' && toup(((char*)tokcstr.data)[1]) == 'X')
-%                                               )
-%                                            || t == 'p' || t == 'P'
-%                                         )
-%             )
-%    )
-% )
 
 % the . digit production rule is handled by the case '.' ....
 
@@ -315,11 +280,76 @@ The define stack where define symbols are pushed as they are discovered. The fun
 \subsubsection{TOK\_CLDOUBLE}
 \subsubsection{TOK\_PPNUM}
 
-When tok is TOK\_PPNUM, the global variable tokc holds the token value and the global tok holds TOK\_PPNUM . TOK\_PPNUM is obviously not a space and the function tok\_str\_add2() to be called so that token id, length of the toke, and value of the token will be appended to the global token string tokstr\_buf.
+% pp-number:
+%       digit
+%       . digit
+%       pp-number digit
+%       pp-number identifier-nondigit
+%       pp-number e sign
+%       pp-number E sign
+%       pp-number p sign
+%       pp-number P sign
+%       pp-number .
 
-tok\_str\_add2() utilizes the global tok value to do its operation and when it sees that it is looking at at TOK\_PPNUM token, it will consult the global CValue to extract the actual value.
+% defining simple ints
+% simple ints fall under the digit production rule 
 
-A last call to the tokenizer will simply update the internal tracking of the tokenizer to point to next line.
+% c => peeked character 
+% t => former character
+%
+% t is already checked to be valid. (initially it is checked to be a number)
+% now check if the peeked character is also valid.
+% 
+% (!(         (isidnum_table[c - CH_EOF] & (IS_ID|IS_NUM)) // check if peeked char is a number. => digit production rule
+%          || c == '.'                                     // if peeked char is not a number, is it a decimal sign? => pp-number . production rule
+
+
+%             // if peeked char is a sign '+' or '-', 
+%             // then the former must be 'e' or 'E'       +e or +E => e sign or E sign production rule
+%             // or 'p' or 'P'                            +p or +P => p sign or P sign production rule
+%          || ( (c == '+' || c == '-') && (     (    (t == 'e' || t == 'E')
+%                                                 && !(parse_flags & PARSE_FLAG_ASM_FILE && ((char*)tokcstr.data)[0] == '0' && toup(((char*)tokcstr.data)[1]) == 'X')
+%                                               )
+%                                            || t == 'p' || t == 'P'
+%                                         )
+%             )
+%    )
+% )
+
+The C standard defines what pp-numbers are and is shown below:
+
+\begin{verbatim}
+pp-number:
+      digit
+      . digit
+      pp-number digit
+      pp-number identifier-nondigit
+      pp-number e sign
+      pp-number E sign
+      pp-number p sign
+      pp-number P sign
+      pp-number .
+\end{verbatim}
+
+Assigned from the above grammar rules, Preprocessing number tokens lexically include all floating and integer constant tokens. The C standard contains the complete list, but to give you an idea, integer constants include the following:
+
+\begin{itemize}
+\item decimal constants with integer suffix:
+        \begin{itemize}
+        \item unsigned suffix (u or U) as in 1000U
+        \item long suffix (l or L) as in 1024L
+        \item long long suffix (ll or LL) as in 2048LL
+        \item any valid combination of unsigned and long suffix, as in 512ULL
+        \end{itemize}
+
+\item octal constants: '0' followed by a valid octal number as in 0777
+
+\item hexadecimal constants: "0x" followed by any valid hexadecimal number as in 0x1000
+\end{itemize}
+
+This character sequence is extracted and placed into the global \verb|tokc| variable which is supposed to hold the most recently processed constant values. At this point, the supposed constant number value is not treated as a numeric value yet. The lexeme is recorded verbatim to the global \verb|CValue| variable without labelling it as an int or float yet.
+
+
 \subsubsection{TOK\_PPSTR}
 \subsubsection{TOK\_LINENUM}
 \subsubsection{TOK\_TWODOTS}
