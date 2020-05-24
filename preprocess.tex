@@ -363,6 +363,14 @@ This character sequence is extracted and placed into the global \verb|tokc| vari
 
 \section{Including Files}
 
+\subsection{The \#include preprocessing directive}
+
+A \verb|#include| directive shall identify a header or source file that can be processed by the implementation.\footnote{ISO/IEC 9899:TC3 Committee Draft — Septermber 7, 2007, 6.10.2.1} Subsequently, the implementation will cause the replacement of that include directive line with the entire contents of the header.
+
+There are two ways to declare the source file for an include directive line. The first one is to use the \verb|<| and \verb|>| delimiters. Declaring the file this way causes the implementation to search for the file in \emph{implementatation-defined} places - e.g. The \verb|/usr/include/| directory is a standard directory where the GCC looks for header files.
+
+The second way to declare the source file is to enclose the source file in double quotes. The file is then searched for in an \emph{implementatation-defined} manner. Usually, this means the compiler will search for the file in the same directory where the source file is located.
+
 \section{Error}
 
 \section{Pragmas}
